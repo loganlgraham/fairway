@@ -90,6 +90,42 @@ function parseHoleNumber(hole: unknown, fallback: number): number | null {
   return fallback + 1;
 }
 
+function extractYards(hole: unknown): number | null {
+  const direct = asInt(
+    pickField(hole, [
+      "yards",
+      "yard",
+      "yardage",
+      "length",
+      "distance",
+      "distance_yards",
+      "yards_total",
+      "yds",
+    ]),
+  );
+  if (direct != null) return direct;
+
+  const yardages = pickField(hole, ["yardages"]);
+  if (!yardages || typeof yardages !== "object") return null;
+
+  const member = asInt((yardages as Record<string, unknown>).member);
+  if (member != null) return member;
+
+  for (const value of Object.values(yardages as Record<string, unknown>)) {
+    const parsed = asInt(value);
+    if (parsed != null) return parsed;
+  }
+
+  return null;
+}
+
+async function getCourseHoles(id: string): Promise<unknown[]> {
+  const body = await fetchJson(
+    `${BASE_URL}/courses/${encodeURIComponent(id)}/holes`,
+  );
+  return pickArray(body, ["holes", "data"]);
+}
+
 async function fetchJson(url: string): Promise<Json> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -143,6 +179,13 @@ export async function getCourse(id: string): Promise<OpenGolfCourseDetail> {
     asInt(pickField(root, ["num_holes", "holes_count", "hole_count"])) ?? 18;
 
   const rawHoles = pickArray(root, ["holes", "course_holes", "scorecard"]);
+  let rawHoleDetails: unknown[] = [];
+  try {
+    rawHoleDetails = await getCourseHoles(id);
+  } catch {
+    rawHoleDetails = [];
+  }
+
   const holesByNumber = new Map<number, unknown>();
   rawHoles.forEach((hole, idx) => {
     const holeNumber = parseHoleNumber(hole, idx);
@@ -151,10 +194,19 @@ export async function getCourse(id: string): Promise<OpenGolfCourseDetail> {
     }
   });
 
+  const detailedHolesByNumber = new Map<number, unknown>();
+  rawHoleDetails.forEach((hole, idx) => {
+    const holeNumber = parseHoleNumber(hole, idx);
+    if (holeNumber != null && !detailedHolesByNumber.has(holeNumber)) {
+      detailedHolesByNumber.set(holeNumber, hole);
+    }
+  });
+
   const holes: OpenGolfHole[] = [];
   for (let i = 0; i < numHoles; i++) {
     const target = i + 1;
     const match = holesByNumber.get(target) ?? null;
+    const detailed = detailedHolesByNumber.get(target) ?? null;
     holes.push({
       hole_number: target,
       par: asInt(pickField(match, ["par"])),
@@ -173,18 +225,7 @@ export async function getCourse(id: string): Promise<OpenGolfCourseDetail> {
           "index",
         ]),
       ),
-      yards: asInt(
-        pickField(match, [
-          "yards",
-          "yard",
-          "yardage",
-          "length",
-          "distance",
-          "distance_yards",
-          "yards_total",
-          "yds",
-        ]),
-      ),
+      yards: extractYards(match) ?? extractYards(detailed),
     });
   }
 

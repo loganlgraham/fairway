@@ -92,6 +92,7 @@ export type RoundPlayerRow = {
   profile_id: string;
   position: number;
   course_handicap: number;
+  archived_at: string | null;
 };
 
 export type RoundPlayerInsert = {
@@ -100,6 +101,7 @@ export type RoundPlayerInsert = {
   profile_id: string;
   position: number;
   course_handicap: number;
+  archived_at?: string | null;
 };
 
 export type ScoreRow = {
@@ -160,7 +162,19 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      update_round_lineup: {
+        Args: {
+          p_round_id: string;
+          p_players: {
+            id?: string | null;
+            profile_id: string;
+            course_handicap: number;
+          }[];
+        };
+        Returns: void;
+      };
+    };
     Enums: Record<string, never>;
   };
 };

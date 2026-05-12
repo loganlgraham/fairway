@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { CheckCircle2, ChevronLeft, Flag, Wifi } from "lucide-react";
-import { useCompleteRound, useRoundBundle } from "@/hooks/useRound";
+import { CheckCircle2, ChevronLeft, Flag, Users, Wifi } from "lucide-react";
+import {
+  useCompleteRound,
+  useRoundBundle,
+  useUpdateRoundLineup,
+} from "@/hooks/useRound";
 import { useRoundRealtime } from "@/hooks/useRoundRealtime";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +13,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Modal } from "@/components/ui/Modal";
 import { HoleScorer } from "@/components/scoring/HoleScorer";
 import { LeaderboardTabs } from "@/components/leaderboard/LeaderboardTabs";
+import { PlayerPicker } from "@/components/players/PlayerPicker";
+import type { PickedPlayer } from "@/components/players/PlayerPicker";
 import type { ScoringInput } from "@/scoring/types";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/auth/useAuth";
@@ -20,11 +26,14 @@ export default function RoundPage() {
   const { user } = useAuth();
   const bundle = useRoundBundle(roundId);
   const complete = useCompleteRound();
+  const updateLineup = useUpdateRoundLineup(roundId);
   const { show } = useToast();
   useRoundRealtime(roundId);
 
   const [holeIdx, setHoleIdx] = useState(0);
   const [confirmFinish, setConfirmFinish] = useState(false);
+  const [editPlayersOpen, setEditPlayersOpen] = useState(false);
+  const [lineupDraft, setLineupDraft] = useState<PickedPlayer[]>([]);
 
   const scoreLookup = useMemo(() => {
     const map = new Map<string, number | null>();
@@ -48,7 +57,10 @@ export default function RoundPage() {
     return {
       players: bundle.data.players.map((p) => ({
         id: p.id,
-        display_name: p.profile.display_name,
+        display_name:
+          p.archived_at == null
+            ? p.profile.display_name
+            : `${p.profile.display_name} (Archived)`,
         course_handicap: p.course_handicap,
       })),
       holes: bundle.data.holes,
@@ -80,13 +92,16 @@ export default function RoundPage() {
     );
   }
 
-  const { round, course, holes, players } = bundle.data;
+  const { round, course, holes, activePlayers } = bundle.data;
   const hole = holes[Math.min(holeIdx, holes.length - 1)];
   const isOwner = round.owner_id === user?.id;
   const readonly = !isOwner || round.status === "completed";
 
-  const totalScored = bundle.data.scores.filter((s) => s.strokes != null).length;
-  const expected = holes.length * players.length;
+  const activePlayerIds = new Set(activePlayers.map((p) => p.id));
+  const totalScored = bundle.data.scores.filter(
+    (s) => s.strokes != null && activePlayerIds.has(s.round_player_id),
+  ).length;
+  const expected = holes.length * activePlayers.length;
   const progressPct = expected > 0 ? Math.round((totalScored / expected) * 100) : 0;
 
   const finish = async () => {
@@ -96,6 +111,37 @@ export default function RoundPage() {
     } catch (err) {
       show(
         err instanceof Error ? err.message : "Could not complete round",
+        "error",
+      );
+    }
+  };
+
+  const openEditPlayers = () => {
+    setLineupDraft(
+      activePlayers.map((p) => ({
+        profile: p.profile,
+        course_handicap: p.course_handicap,
+      })),
+    );
+    setEditPlayersOpen(true);
+  };
+
+  const saveLineup = async () => {
+    try {
+      await updateLineup.mutateAsync({
+        players: lineupDraft.map((p) => ({
+          profile_id: p.profile.id,
+          course_handicap: p.course_handicap,
+          id:
+            activePlayers.find((ap) => ap.profile_id === p.profile.id)?.id ??
+            undefined,
+        })),
+      });
+      setEditPlayersOpen(false);
+      show("Player lineup updated", "success");
+    } catch (err) {
+      show(
+        err instanceof Error ? err.message : "Could not update players",
         "error",
       );
     }
@@ -123,7 +169,8 @@ export default function RoundPage() {
         </h1>
         <p className="text-sm text-charcoal-muted">
           {round.formats.map((f) => FORMAT_SHORT[f]).join(" · ")} ·{" "}
-          {players.length} player{players.length === 1 ? "" : "s"} · {progressPct}% complete
+          {activePlayers.length} player{activePlayers.length === 1 ? "" : "s"} ·{" "}
+          {progressPct}% complete
         </p>
         {!isOwner ? (
           <p className="mt-1 text-xs text-charcoal-muted">
@@ -136,7 +183,7 @@ export default function RoundPage() {
         <HoleScorer
           roundId={round.id}
           hole={hole}
-          players={players}
+          players={activePlayers}
           scoreFor={(rpId, h) => scoreLookup.get(`${rpId}:${h}`) ?? null}
           onPrev={() => setHoleIdx((i) => Math.max(0, i - 1))}
           onNext={() => setHoleIdx((i) => Math.min(holes.length - 1, i + 1))}
@@ -150,7 +197,10 @@ export default function RoundPage() {
         holes={holes}
         activeIdx={holeIdx}
         onPick={setHoleIdx}
-        completedHoleNumbers={completedHoles(bundle.data)}
+        completedHoleNumbers={completedHoles({
+          scores: bundle.data.scores,
+          players: activePlayers,
+        })}
       />
 
       <Card>
@@ -165,7 +215,14 @@ export default function RoundPage() {
       </Card>
 
       {isOwner && round.status !== "completed" ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={openEditPlayers}
+            leadingIcon={<Users size={14} />}
+          >
+            Edit players
+          </Button>
           <Button
             onClick={() => setConfirmFinish(true)}
             leadingIcon={<Flag size={14} />}
@@ -174,6 +231,31 @@ export default function RoundPage() {
           </Button>
         </div>
       ) : null}
+
+      <Modal
+        open={editPlayersOpen}
+        onClose={() => setEditPlayersOpen(false)}
+        title="Edit players"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditPlayersOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveLineup}
+              loading={updateLineup.isPending}
+              disabled={lineupDraft.length === 0}
+            >
+              Save players
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-xs text-charcoal-muted">
+          Removed players stay visible on the leaderboard as archived.
+        </p>
+        <PlayerPicker picked={lineupDraft} onChange={setLineupDraft} />
+      </Modal>
 
       <Modal
         open={confirmFinish}
