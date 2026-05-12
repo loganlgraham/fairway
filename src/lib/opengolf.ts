@@ -64,6 +64,32 @@ function pickField(obj: unknown, keys: string[]): unknown {
   return null;
 }
 
+function parseHoleNumber(hole: unknown, fallback: number): number | null {
+  const explicit = asInt(
+    pickField(hole, [
+      "hole_number",
+      "number",
+      "hole",
+      "holeNumber",
+      "hole_no",
+      "hole_num",
+      "sequence",
+      "seq",
+      "index",
+    ]),
+  );
+  if (explicit != null) return explicit;
+
+  // Some feeds only label holes as "Hole 1", "No. 2", etc.
+  const label = asString(pickField(hole, ["name", "label", "title"]));
+  if (label) {
+    const match = label.match(/\d+/);
+    if (match) return asInt(match[0]);
+  }
+
+  return fallback + 1;
+}
+
 async function fetchJson(url: string): Promise<Json> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -117,15 +143,18 @@ export async function getCourse(id: string): Promise<OpenGolfCourseDetail> {
     asInt(pickField(root, ["num_holes", "holes_count", "hole_count"])) ?? 18;
 
   const rawHoles = pickArray(root, ["holes", "course_holes", "scorecard"]);
+  const holesByNumber = new Map<number, unknown>();
+  rawHoles.forEach((hole, idx) => {
+    const holeNumber = parseHoleNumber(hole, idx);
+    if (holeNumber != null && !holesByNumber.has(holeNumber)) {
+      holesByNumber.set(holeNumber, hole);
+    }
+  });
+
   const holes: OpenGolfHole[] = [];
   for (let i = 0; i < numHoles; i++) {
     const target = i + 1;
-    const match = rawHoles.find((h) => {
-      const n = asInt(
-        pickField(h, ["hole_number", "number", "hole", "holeNumber"]),
-      );
-      return n === target;
-    });
+    const match = holesByNumber.get(target) ?? null;
     holes.push({
       hole_number: target,
       par: asInt(pickField(match, ["par"])),
@@ -133,13 +162,29 @@ export async function getCourse(id: string): Promise<OpenGolfCourseDetail> {
         pickField(match, [
           "hcp_rating",
           "handicap",
+          "handicap_rating",
+          "handicap_index",
           "hcp",
           "hdcp",
+          "stroke",
           "stroke_index",
+          "strokeIndex",
           "si",
+          "index",
         ]),
       ),
-      yards: asInt(pickField(match, ["yards", "yardage", "distance"])),
+      yards: asInt(
+        pickField(match, [
+          "yards",
+          "yard",
+          "yardage",
+          "length",
+          "distance",
+          "distance_yards",
+          "yards_total",
+          "yds",
+        ]),
+      ),
     });
   }
 

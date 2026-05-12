@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 
@@ -36,9 +36,17 @@ export function ConfirmHoleDataModal({
   saving = false,
 }: ConfirmHoleDataModalProps) {
   const [rows, setRows] = useState<Draft[]>([]);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    const shouldSeed = !wasOpenRef.current || rows.length !== numHoles;
+    if (!shouldSeed) return;
+
     const seed: Draft[] = [];
     for (let i = 0; i < numHoles; i++) {
       const src = initial[i];
@@ -50,7 +58,8 @@ export function ConfirmHoleDataModal({
       });
     }
     setRows(seed);
-  }, [open, initial, numHoles]);
+    wasOpenRef.current = true;
+  }, [open, initial, numHoles, rows.length]);
 
   const validation = useMemo(() => {
     const pars: number[] = [];

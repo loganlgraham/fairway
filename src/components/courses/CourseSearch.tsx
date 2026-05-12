@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, MapPin, Loader2 } from "lucide-react";
 import {
   useOpenGolfCourse,
@@ -27,6 +27,16 @@ export function CourseSearch({ onSelected }: CourseSearchProps) {
   const search = useOpenGolfSearch(query);
   const detail = useOpenGolfCourse(pickedId);
   const upsert = useUpsertOpenGolfCourse();
+  const initialHoles = useMemo(
+    () =>
+      detail.data?.holes.map((h) => ({
+        hole_number: h.hole_number,
+        par: h.par ?? undefined,
+        hcp_rating: h.hcp_rating ?? undefined,
+        yards: h.yards,
+      })) ?? [],
+    [detail.data],
+  );
 
   const onConfirmHoles = async (holes: ConfirmHoleRow[]) => {
     if (!detail.data) return;
@@ -109,14 +119,7 @@ export function CourseSearch({ onSelected }: CourseSearchProps) {
         open={!!pickedId && !!detail.data}
         courseName={detail.data?.name ?? pickedName}
         numHoles={detail.data?.num_holes ?? 18}
-        initial={
-          detail.data?.holes.map((h) => ({
-            hole_number: h.hole_number,
-            par: h.par ?? undefined,
-            hcp_rating: h.hcp_rating ?? undefined,
-            yards: h.yards,
-          })) ?? []
-        }
+        initial={initialHoles}
         saving={upsert.isPending}
         onCancel={() => {
           setPickedId(null);
