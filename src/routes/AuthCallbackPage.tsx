@@ -12,15 +12,9 @@ export default function AuthCallbackPage() {
     let cancelled = false;
     (async () => {
       try {
-        const url = window.location.href;
-        const hasCode = new URL(url).searchParams.has("code");
-        if (hasCode) {
-          const { error: err } = await supabase.auth.exchangeCodeForSession(url);
-          if (err) throw err;
-        } else {
-          // Hash-based magic link (legacy) — getSession will pick it up via detectSessionInUrl.
-          await supabase.auth.getSession();
-        }
+        // In SPA mode, Supabase parses auth tokens from the callback URL
+        // (hash/query) via detectSessionInUrl, then exposes them via getSession.
+        await supabase.auth.getSession();
         if (!cancelled) {
           navigate("/", { replace: true });
         }
