@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
-import { Plus, Flag } from "lucide-react";
-import { useRecentRounds } from "@/hooks/useRound";
+import { Plus, Flag, Trash2 } from "lucide-react";
+import { useDeleteRound, useRecentRounds } from "@/hooks/useRound";
 import { useSelfProfile } from "@/hooks/useFriends";
 import { useCourseWithHoles } from "@/hooks/useCourses";
 import { Card, CardEyebrow, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
+import { useToast } from "@/components/ui/Toast";
 import { formatDate, formatHandicap } from "@/utils/format";
 import { FORMAT_SHORT } from "@/types/golf";
 import type { RoundRow } from "@/types/database";
@@ -14,6 +15,8 @@ import type { RoundRow } from "@/types/database";
 export default function HomePage() {
   const self = useSelfProfile();
   const rounds = useRecentRounds(10);
+  const deleteRound = useDeleteRound();
+  const { show } = useToast();
 
   return (
     <div className="space-y-5">
@@ -67,7 +70,28 @@ export default function HomePage() {
           <ul className="space-y-2">
             {(rounds.data ?? []).map((r) => (
               <li key={r.id}>
-                <RoundRow round={r} />
+                <RoundRow
+                  round={r}
+                  deleting={deleteRound.isPending && deleteRound.variables === r.id}
+                  onDelete={async () => {
+                    if (
+                      !window.confirm(
+                        "Delete this round and all its scores? This cannot be undone.",
+                      )
+                    ) {
+                      return;
+                    }
+                    try {
+                      await deleteRound.mutateAsync(r.id);
+                      show("Round deleted", "success");
+                    } catch (err) {
+                      show(
+                        err instanceof Error ? err.message : "Could not delete round",
+                        "error",
+                      );
+                    }
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -77,24 +101,32 @@ export default function HomePage() {
   );
 }
 
-function RoundRow({ round }: { round: RoundRow }) {
+function RoundRow({
+  round,
+  deleting,
+  onDelete,
+}: {
+  round: RoundRow;
+  deleting: boolean;
+  onDelete: () => void | Promise<void>;
+}) {
   const c = useCourseWithHoles(round.course_id);
   const href =
     round.status === "completed"
       ? `/rounds/${round.id}/summary`
       : `/rounds/${round.id}`;
   return (
-    <Link to={href} className="block">
-      <Card className="flex items-center justify-between gap-3 transition-colors hover:bg-cream-50">
-        <div className="min-w-0">
-          <p className="truncate font-medium text-charcoal">
-            {c.data?.course.name ?? "Loading..."}
-          </p>
-          <p className="truncate text-xs text-charcoal-muted">
-            {formatDate(round.played_on)} ·{" "}
-            {round.formats.map((f) => FORMAT_SHORT[f]).join(" · ")}
-          </p>
-        </div>
+    <Card className="flex items-center justify-between gap-3 transition-colors hover:bg-cream-50">
+      <Link to={href} className="min-w-0 flex-1">
+        <p className="truncate font-medium text-charcoal">
+          {c.data?.course.name ?? "Loading..."}
+        </p>
+        <p className="truncate text-xs text-charcoal-muted">
+          {formatDate(round.played_on)} ·{" "}
+          {round.formats.map((f) => FORMAT_SHORT[f]).join(" · ")}
+        </p>
+      </Link>
+      <div className="flex items-center gap-1.5">
         <span
           className={[
             "rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
@@ -105,8 +137,18 @@ function RoundRow({ round }: { round: RoundRow }) {
         >
           {round.status === "completed" ? "Final" : "Live"}
         </span>
-      </Card>
-    </Link>
+        <Button
+          variant="ghost"
+          onClick={onDelete}
+          loading={deleting}
+          aria-label="Delete round"
+          className="px-2 py-1 text-charcoal-muted hover:text-red-700"
+          leadingIcon={<Trash2 size={14} />}
+        >
+          Delete
+        </Button>
+      </div>
+    </Card>
   );
 }
 

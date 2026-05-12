@@ -49,11 +49,20 @@ export default function RoundSummaryPage() {
       </div>
     );
   }
-  if (!bundle.data) {
+  if (bundle.error || !bundle.data) {
     return (
-      <Card>
-        <p className="text-sm text-red-800">Could not load round.</p>
-      </Card>
+      <div className="space-y-3">
+        <Button variant="ghost" onClick={() => nav("/")} leadingIcon={<ChevronLeft size={14} />}>
+          Back
+        </Button>
+        <Card>
+          <p className="text-sm text-red-800">
+            {bundle.error instanceof Error
+              ? bundle.error.message
+              : "Could not load round."}
+          </p>
+        </Card>
+      </div>
     );
   }
 
