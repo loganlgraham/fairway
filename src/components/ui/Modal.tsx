@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -41,9 +42,9 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[70] flex h-dvh w-full items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       onMouseDown={(e) => {
@@ -75,6 +76,7 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
