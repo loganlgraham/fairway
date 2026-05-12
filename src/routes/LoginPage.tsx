@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { Mail, Flag } from "lucide-react";
+import { Mail, Flag, KeyRound } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 
+type Mode = "signin" | "signup";
+
 export default function LoginPage() {
   const { user, loading } = useAuth();
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,22 +26,53 @@ export default function LoginPage() {
   if (loading) return null;
   if (user) return <Navigate to="/" replace />;
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     setSubmitting(true);
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
+
+    try {
+      if (mode === "signup") {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (signUpError) throw signUpError;
+        setMessage(
+          "Account created. If email confirmation is enabled, check your inbox to verify your account.",
+        );
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (signInError) throw signInError;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onGoogleSignIn = async () => {
+    setError(null);
+    setMessage(null);
+    setGoogleLoading(true);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    setSubmitting(false);
-    if (err) {
-      setError(err.message);
-      return;
+    if (oauthError) {
+      setError(oauthError.message);
+      setGoogleLoading(false);
     }
-    setSent(true);
   };
 
   return (
@@ -53,47 +89,95 @@ export default function LoginPage() {
         </Link>
         <Card>
           <h1 className="font-display text-xl font-semibold text-forest">
-            Sign in
+            {mode === "signin" ? "Sign in" : "Create account"}
           </h1>
           <p className="mt-1 text-sm text-charcoal-muted">
-            We&apos;ll email you a magic link. No password required.
+            {mode === "signin"
+              ? "Use email/password or Google."
+              : "Create an account with email/password or Google."}
           </p>
 
-          {sent ? (
-            <div className="mt-5 rounded-lg border border-line bg-cream-50 p-4 text-sm text-charcoal">
-              <p className="font-medium text-forest">Check your inbox.</p>
-              <p className="mt-1 text-charcoal-muted">
-                We sent a sign-in link to <strong>{email}</strong>. Open it on
-                this device to continue.
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("signin")}
+              className={
+                mode === "signin"
+                  ? "chip-on w-full justify-center"
+                  : "chip w-full justify-center"
+              }
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("signup")}
+              className={
+                mode === "signup"
+                  ? "chip-on w-full justify-center"
+                  : "chip w-full justify-center"
+              }
+            >
+              Sign up
+            </button>
+          </div>
+
+          <form onSubmit={onEmailSubmit} className="mt-4 space-y-3">
+            <Input
+              type="email"
+              name="email"
+              label="Email"
+              placeholder="you@club.com"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Input
+              type="password"
+              name="password"
+              label="Password"
+              placeholder="At least 6 characters"
+              required
+              minLength={6}
+              autoComplete={
+                mode === "signin" ? "current-password" : "new-password"
+              }
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {error ? (
+              <p className="text-xs text-red-800" role="alert">
+                {error}
               </p>
-            </div>
-          ) : (
-            <form onSubmit={onSubmit} className="mt-5 space-y-4">
-              <Input
-                type="email"
-                name="email"
-                label="Email"
-                placeholder="you@club.com"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              {error ? (
-                <p className="text-xs text-red-800" role="alert">
-                  {error}
-                </p>
-              ) : null}
-              <Button
-                type="submit"
-                fullWidth
-                loading={submitting}
-                leadingIcon={!submitting ? <Mail size={16} /> : undefined}
-              >
-                Send magic link
-              </Button>
-            </form>
-          )}
+            ) : null}
+            {message ? (
+              <p className="text-xs text-forest" role="status">
+                {message}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              fullWidth
+              loading={submitting}
+              leadingIcon={!submitting ? <KeyRound size={16} /> : undefined}
+            >
+              {mode === "signin" ? "Sign in with email" : "Create account"}
+            </Button>
+          </form>
+
+          <div className="my-4 divider" />
+
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            loading={googleLoading}
+            leadingIcon={!googleLoading ? <Mail size={16} /> : undefined}
+            onClick={onGoogleSignIn}
+          >
+            Continue with Google
+          </Button>
         </Card>
       </div>
     </div>
