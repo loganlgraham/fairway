@@ -152,6 +152,7 @@ interface CreateCustomCourseInput {
   state: string | null;
   country: string | null;
   num_holes: 9 | 18;
+  is_public?: boolean;
   holes: { hole_number: number; par: number; hcp_rating: number; yards: number | null }[];
 }
 
@@ -161,6 +162,7 @@ export function useCreateCustomCourse() {
     mutationFn: async (input: CreateCustomCourseInput) => {
       const { data: userRes } = await supabase.auth.getUser();
       const userId = userRes.user?.id ?? null;
+      const isPublic = input.is_public ?? false;
 
       const { data: courseRow, error: cErr } = await supabase
         .from("courses")
@@ -170,7 +172,7 @@ export function useCreateCustomCourse() {
           state: input.state,
           country: input.country,
           num_holes: input.num_holes,
-          is_public: false,
+          is_public: isPublic,
           created_by: userId,
         })
         .select()

@@ -52,3 +52,22 @@ export interface GhinExtractResult {
   home_club: string | null;
   confidence: number;
 }
+
+export interface ScorecardExtractHole {
+  hole_number: number;
+  par: number | null;
+  hcp_rating: number | null;
+  yards: number | null;
+}
+
+export interface ScorecardExtractResult {
+  course_name: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  num_holes: 9 | 18;
+  tee_name: string | null;
+  holes: ScorecardExtractHole[];
+  confidence: number;
+  warnings: string[];
+}

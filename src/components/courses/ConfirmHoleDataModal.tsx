@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 
@@ -17,6 +18,7 @@ interface ConfirmHoleDataModalProps {
   onCancel: () => void;
   onConfirm: (holes: ConfirmHoleRow[]) => void;
   saving?: boolean;
+  reviewContent?: ReactNode;
 }
 
 interface Draft {
@@ -34,6 +36,7 @@ export function ConfirmHoleDataModal({
   onCancel,
   onConfirm,
   saving = false,
+  reviewContent,
 }: ConfirmHoleDataModalProps) {
   const [rows, setRows] = useState<Draft[]>([]);
   const wasOpenRef = useRef(false);
@@ -154,6 +157,7 @@ export function ConfirmHoleDataModal({
         <span className="font-medium text-charcoal">{courseName}</span>. Par
         must be 3-6 and HCP rating must be 1-18 with no duplicates.
       </p>
+      {reviewContent ? <div className="mt-3">{reviewContent}</div> : null}
       {!validation.ok ? (
         <p className="mt-2 text-xs text-red-800">
           {validation.duplicateHcps.length > 0
