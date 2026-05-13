@@ -55,17 +55,19 @@ export function useUpsertSelfProfile() {
       if (!user) throw new Error("Not signed in");
       const { data, error } = await supabase
         .from("profiles")
-        .update({
+        .upsert({
+          user_id: user.id,
+          owner_id: null,
           display_name: input.display_name,
           ghin_number: input.ghin_number ?? null,
           handicap_index: input.handicap_index ?? null,
           low_hi: input.low_hi ?? null,
           home_club: input.home_club ?? null,
-        })
-        .eq("user_id", user.id)
+        }, { onConflict: "user_id" })
         .select()
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Profile save failed");
       return data as ProfileRow;
     },
     onSuccess: () => {
