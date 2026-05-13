@@ -3,6 +3,19 @@ import { supabase } from "@/lib/supabase";
 import type { ProfileRow } from "@/types/database";
 import { useAuth } from "@/auth/useAuth";
 
+function formatSupabaseError(error: {
+  message: string;
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+}) {
+  const parts = [error.message];
+  if (error.code) parts.push(`code=${error.code}`);
+  if (error.details) parts.push(error.details);
+  if (error.hint) parts.push(`hint: ${error.hint}`);
+  return parts.join(" | ");
+}
+
 export function useSelfProfile() {
   const { user } = useAuth();
   return useQuery<ProfileRow | null>({
@@ -14,7 +27,7 @@ export function useSelfProfile() {
         .select("*")
         .eq("user_id", user!.id)
         .maybeSingle();
-      if (error) throw error;
+      if (error) throw new Error(formatSupabaseError(error));
       return (data ?? null) as ProfileRow | null;
     },
   });
@@ -32,7 +45,7 @@ export function useFriends() {
         .eq("owner_id", user!.id)
         .is("user_id", null)
         .order("display_name", { ascending: true });
-      if (error) throw error;
+      if (error) throw new Error(formatSupabaseError(error));
       return (data ?? []) as ProfileRow[];
     },
   });
@@ -66,7 +79,7 @@ export function useUpsertSelfProfile() {
         }, { onConflict: "user_id" })
         .select()
         .maybeSingle();
-      if (error) throw error;
+      if (error) throw new Error(formatSupabaseError(error));
       if (!data) throw new Error("Profile save failed");
       return data as ProfileRow;
     },
@@ -95,7 +108,7 @@ export function useCreateFriend() {
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) throw new Error(formatSupabaseError(error));
       return data as ProfileRow;
     },
     onSuccess: () => {
@@ -122,7 +135,7 @@ export function useUpdateFriend() {
         .eq("id", input.id)
         .select()
         .single();
-      if (error) throw error;
+      if (error) throw new Error(formatSupabaseError(error));
       return data as ProfileRow;
     },
     onSuccess: () => {
@@ -136,7 +149,7 @@ export function useDeleteFriend() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("profiles").delete().eq("id", id);
-      if (error) throw error;
+      if (error) throw new Error(formatSupabaseError(error));
       return id;
     },
     onSuccess: () => {
