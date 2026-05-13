@@ -66,22 +66,34 @@ export function useUpsertSelfProfile() {
   return useMutation({
     mutationFn: async (input: ProfileUpsertInput) => {
       if (!user) throw new Error("Not signed in");
-      const { data, error } = await supabase
+      const payload = {
+        display_name: input.display_name,
+        ghin_number: input.ghin_number ?? null,
+        handicap_index: input.handicap_index ?? null,
+        low_hi: input.low_hi ?? null,
+        home_club: input.home_club ?? null,
+      };
+
+      const { data: updated, error: updateError } = await supabase
         .from("profiles")
-        .upsert({
-          user_id: user.id,
-          owner_id: null,
-          display_name: input.display_name,
-          ghin_number: input.ghin_number ?? null,
-          handicap_index: input.handicap_index ?? null,
-          low_hi: input.low_hi ?? null,
-          home_club: input.home_club ?? null,
-        }, { onConflict: "user_id" })
+        .update(payload)
+        .eq("user_id", user.id)
         .select()
         .maybeSingle();
-      if (error) throw new Error(formatSupabaseError(error));
-      if (!data) throw new Error("Profile save failed");
-      return data as ProfileRow;
+      if (updateError) throw new Error(formatSupabaseError(updateError));
+      if (updated) return updated as ProfileRow;
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          user_id: user.id,
+          owner_id: null,
+          ...payload,
+        })
+        .select()
+        .single();
+      if (insertError) throw new Error(formatSupabaseError(insertError));
+      return inserted as ProfileRow;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["self-profile"] });
