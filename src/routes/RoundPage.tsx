@@ -158,13 +158,14 @@ export default function RoundPage() {
           <ChevronLeft size={16} /> Home
         </button>
         <span className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-2 py-0.5 text-[11px] text-charcoal-muted">
-          <Wifi size={12} className="text-forest" /> Live
+          <Wifi size={12} className="text-forest" />
+          <span className="hidden sm:inline">Live</span>
         </span>
       </header>
 
       <div>
         <CardEyebrow>Round in progress</CardEyebrow>
-        <h1 className="font-display text-2xl font-semibold text-forest">
+        <h1 className="font-display text-xl font-semibold text-forest sm:text-2xl">
           {course.name}
         </h1>
         <p className="text-sm text-charcoal-muted">
@@ -189,11 +190,13 @@ export default function RoundPage() {
           onNext={() => setHoleIdx((i) => Math.min(holes.length - 1, i + 1))}
           hasPrev={holeIdx > 0}
           hasNext={holeIdx < holes.length - 1}
+          prevHoleNumber={holes[holeIdx - 1]?.hole_number ?? null}
+          nextHoleNumber={holes[holeIdx + 1]?.hole_number ?? null}
           readonly={readonly}
         />
       ) : null}
 
-      <HoleStrip
+      <HoleGrid
         holes={holes}
         activeIdx={holeIdx}
         onPick={setHoleIdx}
@@ -215,20 +218,29 @@ export default function RoundPage() {
       </Card>
 
       {isOwner && round.status !== "completed" ? (
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={openEditPlayers}
-            leadingIcon={<Users size={14} />}
-          >
-            Edit players
-          </Button>
-          <Button
-            onClick={() => setConfirmFinish(true)}
-            leadingIcon={<Flag size={14} />}
-          >
-            Finish round
-          </Button>
+        <div
+          className="sticky bottom-0 -mx-4 mt-2 border-t border-line bg-cream/95 px-4 pt-3 backdrop-blur"
+          style={{
+            paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
+          }}
+        >
+          <div className="mx-auto flex max-w-3xl gap-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={openEditPlayers}
+              leadingIcon={<Users size={14} />}
+            >
+              Edit players
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => setConfirmFinish(true)}
+              leadingIcon={<Flag size={14} />}
+            >
+              Finish round
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -296,27 +308,72 @@ function completedHoles(bundle: {
   return complete;
 }
 
-interface HoleStripProps {
+interface HoleGridProps {
   holes: { hole_number: number; par: number }[];
   activeIdx: number;
   onPick: (idx: number) => void;
   completedHoleNumbers: Set<number>;
 }
 
-function HoleStrip({ holes, activeIdx, onPick, completedHoleNumbers }: HoleStripProps) {
+function HoleGrid({ holes, activeIdx, onPick, completedHoleNumbers }: HoleGridProps) {
+  const front = holes.slice(0, 9);
+  const back = holes.slice(9, 18);
   return (
-    <div className="card-padded">
-      <div className="flex gap-1.5 overflow-x-auto">
+    <div className="card-padded space-y-3">
+      <HoleRow
+        label="Out"
+        holes={front}
+        startIdx={0}
+        activeIdx={activeIdx}
+        onPick={onPick}
+        completedHoleNumbers={completedHoleNumbers}
+      />
+      {back.length > 0 ? (
+        <HoleRow
+          label="In"
+          holes={back}
+          startIdx={9}
+          activeIdx={activeIdx}
+          onPick={onPick}
+          completedHoleNumbers={completedHoleNumbers}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+interface HoleRowProps {
+  label: string;
+  holes: { hole_number: number; par: number }[];
+  startIdx: number;
+  activeIdx: number;
+  onPick: (idx: number) => void;
+  completedHoleNumbers: Set<number>;
+}
+
+function HoleRow({
+  label,
+  holes,
+  startIdx,
+  activeIdx,
+  onPick,
+  completedHoleNumbers,
+}: HoleRowProps) {
+  return (
+    <div>
+      <CardEyebrow className="mb-1.5">{label}</CardEyebrow>
+      <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
         {holes.map((h, i) => {
-          const isActive = i === activeIdx;
+          const idx = startIdx + i;
+          const isActive = idx === activeIdx;
           const done = completedHoleNumbers.has(h.hole_number);
           return (
             <button
               key={h.hole_number}
               type="button"
-              onClick={() => onPick(i)}
+              onClick={() => onPick(idx)}
               className={[
-                "flex h-12 w-10 shrink-0 flex-col items-center justify-center rounded-md border text-[11px] font-semibold transition-colors",
+                "flex aspect-[3/4] flex-col items-center justify-center rounded-md border text-xs font-semibold transition-colors",
                 isActive
                   ? "border-forest bg-forest text-cream"
                   : done
@@ -324,9 +381,10 @@ function HoleStrip({ holes, activeIdx, onPick, completedHoleNumbers }: HoleStrip
                     : "border-line bg-white text-charcoal hover:bg-cream-50",
               ].join(" ")}
               aria-label={`Hole ${h.hole_number}, par ${h.par}`}
+              aria-current={isActive ? "true" : undefined}
             >
-              <span>{h.hole_number}</span>
-              <span className="text-[10px] font-normal opacity-70">
+              <span className="leading-none">{h.hole_number}</span>
+              <span className="mt-0.5 text-[10px] font-normal leading-none opacity-70">
                 {h.par}
               </span>
             </button>

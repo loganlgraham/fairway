@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useUpsertScore } from "@/hooks/useScores";
 import { strokesReceived } from "@/scoring/strokesReceived";
@@ -14,8 +15,13 @@ interface HoleScorerProps {
   onNext: () => void;
   hasPrev: boolean;
   hasNext: boolean;
+  prevHoleNumber?: number | null;
+  nextHoleNumber?: number | null;
   readonly?: boolean;
 }
+
+const SWIPE_DISTANCE_THRESHOLD = 50;
+const SWIPE_DOMINANCE_RATIO = 1.5;
 
 export function HoleScorer({
   roundId,
@@ -26,21 +32,61 @@ export function HoleScorer({
   onNext,
   hasPrev,
   hasNext,
+  prevHoleNumber = null,
+  nextHoleNumber = null,
   readonly = false,
 }: HoleScorerProps) {
   const upsert = useUpsertScore();
+  const touchStart = useRef<{ x: number; y: number; onInput: boolean } | null>(
+    null,
+  );
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    const t = e.touches[0];
+    if (!t) return;
+    const target = e.target as HTMLElement | null;
+    const onInput =
+      target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+    touchStart.current = { x: t.clientX, y: t.clientY, onInput };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLElement>) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start || start.onInput) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_DISTANCE_THRESHOLD) return;
+    if (Math.abs(dx) < Math.abs(dy) * SWIPE_DOMINANCE_RATIO) return;
+    if (dx < 0 && hasNext) {
+      onNext();
+    } else if (dx > 0 && hasPrev) {
+      onPrev();
+    }
+  };
 
   return (
-    <section className="card-padded">
-      <div className="flex items-center justify-between gap-3">
+    <section
+      className="card-padded touch-pan-y select-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div className="flex items-stretch justify-between gap-2">
         <button
           type="button"
           onClick={onPrev}
           disabled={!hasPrev}
-          className="rounded-md p-1.5 text-charcoal-muted hover:bg-cream-200 disabled:opacity-30"
-          aria-label="Previous hole"
+          className="inline-flex min-h-11 flex-1 items-center justify-start gap-1 rounded-lg px-2 text-sm font-medium text-charcoal-muted hover:bg-cream-200 disabled:pointer-events-none disabled:opacity-30 sm:flex-none"
+          aria-label={
+            prevHoleNumber != null
+              ? `Previous hole, hole ${prevHoleNumber}`
+              : "Previous hole"
+          }
         >
           <ChevronLeft size={20} />
+          {prevHoleNumber != null ? <span>{prevHoleNumber}</span> : null}
         </button>
         <div className="text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass">
@@ -58,9 +104,14 @@ export function HoleScorer({
           type="button"
           onClick={onNext}
           disabled={!hasNext}
-          className="rounded-md p-1.5 text-charcoal-muted hover:bg-cream-200 disabled:opacity-30"
-          aria-label="Next hole"
+          className="inline-flex min-h-11 flex-1 items-center justify-end gap-1 rounded-lg px-2 text-sm font-medium text-charcoal-muted hover:bg-cream-200 disabled:pointer-events-none disabled:opacity-30 sm:flex-none"
+          aria-label={
+            nextHoleNumber != null
+              ? `Next hole, hole ${nextHoleNumber}`
+              : "Next hole"
+          }
         >
+          {nextHoleNumber != null ? <span>{nextHoleNumber}</span> : null}
           <ChevronRight size={20} />
         </button>
       </div>
@@ -86,6 +137,7 @@ export function HoleScorer({
               <ScoreCell
                 value={value}
                 par={hole.par}
+                holeNumber={hole.hole_number}
                 disabled={readonly || upsert.isPending}
                 onCommit={(next) => {
                   if (next === value) return;

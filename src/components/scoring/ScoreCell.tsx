@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 interface ScoreCellProps {
   value: number | null;
   par: number;
+  holeNumber: number;
   onCommit: (next: number | null) => void;
   disabled?: boolean;
 }
@@ -17,13 +18,19 @@ function classForVsPar(strokes: number | null, par: number): string {
   return "border-line bg-cream-50 text-charcoal-muted";
 }
 
-export function ScoreCell({ value, par, onCommit, disabled }: ScoreCellProps) {
+export function ScoreCell({
+  value,
+  par,
+  holeNumber,
+  onCommit,
+  disabled,
+}: ScoreCellProps) {
   const [draft, setDraft] = useState<string>(value == null ? "" : String(value));
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setDraft(value == null ? "" : String(value));
-  }, [value]);
+  }, [holeNumber, value]);
 
   const commit = (raw: string) => {
     if (raw.trim() === "") {
@@ -55,7 +62,7 @@ export function ScoreCell({ value, par, onCommit, disabled }: ScoreCellProps) {
         }
       }}
       className={[
-        "h-12 w-12 rounded-lg border text-center font-display text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-forest/20 disabled:opacity-60",
+        "h-14 w-14 rounded-lg border text-center font-display text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-forest/20 disabled:opacity-60 sm:h-12 sm:w-12 sm:text-lg",
         classForVsPar(value, par),
       ].join(" ")}
     />
