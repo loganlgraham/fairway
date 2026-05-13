@@ -64,22 +64,34 @@ export function ConfirmHoleDataModal({
   const validation = useMemo(() => {
     const pars: number[] = [];
     const hcps: number[] = [];
-    let firstMissing: number | null = null;
+    const invalidParHoles = new Set<number>();
+    const invalidHcpHoles = new Set<number>();
+    const hcpCounts = new Map<number, number>();
     rows.forEach((r) => {
       const par = Number(r.par);
       const hcp = Number(r.hcp_rating);
       if (!Number.isFinite(par) || par < 3 || par > 6) {
-        if (firstMissing == null) firstMissing = r.hole_number;
+        invalidParHoles.add(r.hole_number);
       } else {
         pars.push(par);
       }
       if (!Number.isFinite(hcp) || hcp < 1 || hcp > 18) {
-        if (firstMissing == null) firstMissing = r.hole_number;
+        invalidHcpHoles.add(r.hole_number);
       } else {
         hcps.push(hcp);
+        hcpCounts.set(hcp, (hcpCounts.get(hcp) ?? 0) + 1);
       }
     });
+    const invalidHoles = rows
+      .map((r) => r.hole_number)
+      .filter(
+        (hole) => invalidParHoles.has(hole) || invalidHcpHoles.has(hole),
+      );
     const uniqueHcps = new Set(hcps);
+    const duplicateHcps = Array.from(hcpCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([hcp]) => hcp)
+      .sort((a, b) => a - b);
     const allHcpsValid =
       hcps.length === rows.length && uniqueHcps.size === rows.length;
     return {
@@ -87,8 +99,11 @@ export function ConfirmHoleDataModal({
         rows.length > 0 &&
         pars.length === rows.length &&
         allHcpsValid &&
-        firstMissing == null,
-      firstMissing,
+        invalidHoles.length === 0,
+      invalidHoles,
+      invalidParHoles,
+      invalidHcpHoles,
+      duplicateHcps,
       hcpsValid: allHcpsValid,
     };
   }, [rows]);
@@ -139,6 +154,13 @@ export function ConfirmHoleDataModal({
         <span className="font-medium text-charcoal">{courseName}</span>. Par
         must be 3-6 and HCP rating must be 1-18 with no duplicates.
       </p>
+      {!validation.ok ? (
+        <p className="mt-2 text-xs text-red-800">
+          {validation.duplicateHcps.length > 0
+            ? `Each hole needs a unique HCP rating from 1-18. Duplicate values: ${validation.duplicateHcps.join(", ")}.`
+            : `Fill valid Par and HCP for holes: ${validation.invalidHoles.join(", ")}.`}
+        </p>
+      ) : null}
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[420px] border-separate border-spacing-0 text-sm">
           <thead>
@@ -161,7 +183,11 @@ export function ConfirmHoleDataModal({
                     inputMode="numeric"
                     min={3}
                     max={6}
-                    className="input h-9 w-16 py-1 text-center"
+                    className={`input h-9 w-16 py-1 text-center ${
+                      validation.invalidParHoles.has(r.hole_number)
+                        ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                        : ""
+                    }`}
                     value={r.par}
                     onChange={(e) => update(idx, "par", e.target.value)}
                   />
@@ -172,7 +198,11 @@ export function ConfirmHoleDataModal({
                     inputMode="numeric"
                     min={1}
                     max={18}
-                    className="input h-9 w-16 py-1 text-center"
+                    className={`input h-9 w-16 py-1 text-center ${
+                      validation.invalidHcpHoles.has(r.hole_number)
+                        ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                        : ""
+                    }`}
                     value={r.hcp_rating}
                     onChange={(e) =>
                       update(idx, "hcp_rating", e.target.value)
@@ -194,13 +224,6 @@ export function ConfirmHoleDataModal({
           </tbody>
         </table>
       </div>
-      {!validation.ok && validation.firstMissing != null ? (
-        <p className="mt-3 text-xs text-red-800">
-          {validation.hcpsValid
-            ? `Check hole ${validation.firstMissing}.`
-            : "Each hole needs a unique HCP rating from 1-18."}
-        </p>
-      ) : null}
     </Modal>
   );
 }
