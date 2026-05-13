@@ -81,10 +81,22 @@ export function useUpsertOpenGolfCourse() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ detail, holes }: UpsertOpenGolfCourseInput) => {
-      const { data: courseRow, error: cErr } = await supabase
+      // Avoid updating shared/public seed rows because RLS only allows
+      // updates by the row creator. We only insert when missing.
+      const { data: existingCourse, error: existingErr } = await supabase
         .from("courses")
-        .upsert(
-          {
+        .select("*")
+        .eq("opengolf_id", detail.id)
+        .maybeSingle();
+      if (existingErr) throw existingErr;
+
+      let course: CourseRow;
+      if (existingCourse) {
+        course = existingCourse as CourseRow;
+      } else {
+        const { data: insertedCourse, error: insertErr } = await supabase
+          .from("courses")
+          .insert({
             opengolf_id: detail.id,
             name: detail.name,
             city: detail.city,
@@ -93,13 +105,25 @@ export function useUpsertOpenGolfCourse() {
             num_holes: detail.num_holes,
             is_public: true,
             created_by: null,
-          },
-          { onConflict: "opengolf_id" },
-        )
-        .select()
-        .single();
-      if (cErr) throw cErr;
-      const course = courseRow as CourseRow;
+          })
+          .select()
+          .single();
+        if (insertErr) {
+          if (insertErr.code === "23505") {
+            const { data: racedCourse, error: racedErr } = await supabase
+              .from("courses")
+              .select("*")
+              .eq("opengolf_id", detail.id)
+              .single();
+            if (racedErr) throw racedErr;
+            course = racedCourse as CourseRow;
+          } else {
+            throw insertErr;
+          }
+        } else {
+          course = insertedCourse as CourseRow;
+        }
+      }
 
       const rows = holes.map((h) => ({
         course_id: course.id,
