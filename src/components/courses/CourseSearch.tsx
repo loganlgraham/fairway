@@ -13,6 +13,7 @@ import {
 } from "./ConfirmHoleDataModal";
 import type { CourseRow } from "@/types/database";
 import { useToast } from "@/components/ui/Toast";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 interface CourseSearchProps {
   onSelected: (course: CourseRow) => void;
@@ -49,8 +50,17 @@ export function CourseSearch({ onSelected }: CourseSearchProps) {
       setPickedName("");
       onSelected(course);
     } catch (err) {
+      const e = err as Partial<PostgrestError> | Error;
+      const details =
+        "code" in e || "details" in e
+          ? [e.message, (e as Partial<PostgrestError>).code, (e as Partial<PostgrestError>).details]
+              .filter(Boolean)
+              .join(" | ")
+          : err instanceof Error
+            ? err.message
+            : "Failed to save course";
       show(
-        err instanceof Error ? err.message : "Failed to save course",
+        details || "Failed to save course",
         "error",
       );
     }
