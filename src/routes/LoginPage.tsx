@@ -32,13 +32,16 @@ export default function LoginPage() {
     setMessage(null);
     setSubmitting(true);
 
+    const trimmedEmail = email.trim();
+    const redirectTo = `${window.location.origin}/auth/callback`;
+
     try {
       if (mode === "signup") {
         const { error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: redirectTo,
           },
         });
         if (signUpError) throw signUpError;
@@ -47,7 +50,7 @@ export default function LoginPage() {
         );
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
         });
         if (signInError) throw signInError;
